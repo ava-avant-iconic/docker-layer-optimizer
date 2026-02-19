@@ -1,171 +1,209 @@
 # Docker Layer Optimizer
 
-CLI tool that analyzes Dockerfiles to identify inefficiencies in layer structure, caching, and image size.
+A CLI tool that analyzes Dockerfiles to identify inefficiencies in layer structure, caching, and image size. Helps you build smaller, faster Docker images with better cache utilization.
 
 ## Features
 
-- 📦 **Dockerfile Parser** - Parse Dockerfiles with multi-stage build detection
-- 📊 **Layer Size Analysis** - Analyze layer structure and identify inefficiencies
-- 💡 **Cache Optimization** - Smart suggestions for better Docker layer caching
-- 📏 **Size Estimation** - Estimate final image size with breakdown by category
-- 🔍 **Best Practices** - Enforce Docker best practices automatically
-- 📝 **Diff Output** - See before/after comparisons for suggested changes
+- 🔍 **Dockerfile Parser** - Parses Dockerfiles with multi-stage build detection
+- 📊 **Layer Size Analysis** - Analyzes layer sizes from `docker history` or estimates from Dockerfile
+- ⚡ **Cache Optimization Rules** - Applies best practices to identify caching opportunities
+- 🎯 **Smart Recommendations** - Actionable suggestions with severity levels
+- 📝 **CLI with Diff Output** - Easy-to-use command-line interface
+- 🧪 **Test Coverage** - Comprehensive test suite
 
 ## Installation
+
+### Global Install
 
 ```bash
 npm install -g docker-layer-optimizer
 ```
 
-Or use directly with npx:
+### Local Install
 
 ```bash
-npx docker-layer-optimizer Dockerfile
+npm install docker-layer-optimizer
+npx docker-layer-opt analyze Dockerfile
 ```
 
 ## Usage
 
-### Basic Usage
+### Basic Analysis
 
 ```bash
-docker-layer-optimizer Dockerfile
+docker-layer-opt analyze Dockerfile
 ```
 
-### Output Formats
+### With Size Estimation
 
-**Text output (default):**
 ```bash
-docker-layer-optimizer Dockerfile
+docker-layer-opt analyze Dockerfile --estimate
 ```
 
-**JSON output:**
+### JSON Output
+
 ```bash
-docker-layer-optimizer Dockerfile --output json
+docker-layer-opt analyze Dockerfile --format json
 ```
 
-### Options
+### CI Integration
 
-- `-o, --output <format>` - Output format: `text` or `json` (default: `text`)
-- `-v, --verbose` - Show verbose output with diff examples
-- `--severity <level>` - Minimum severity to show: `high`, `medium`, `low` (default: `medium`)
-
-### Examples
-
-Analyze a Dockerfile with high-severity issues only:
 ```bash
-docker-layer-optimizer Dockerfile --severity high
+# Returns exit code 2 if high-severity issues are found
+docker-layer-opt analyze Dockerfile
 ```
-
-Show verbose output with diff examples:
-```bash
-docker-layer-optimizer Dockerfile --verbose
-```
-
-## What It Checks
-
-### Cache Optimizations
-
-- **apt-get/update separation** - Combines `apt-get update` and `apt-get install` into a single layer
-- **Package.json placement** - Suggests moving `package*.json` before source code copies
-- **Cache mounts** - Recommends BuildKit cache mounts for package managers
-- **Layer ordering** - Identifies cache-breaking layer order issues
-- **Cleanup commands** - Ensures cleanup after package installations
-
-### Size Optimizations
-
-- **Base image selection** - Suggests alpine/slim variants where appropriate
-- **Multi-stage builds** - Recommends multi-stage builds to exclude build tools
-- **Unnecessary copies** - Detects copying of `node_modules` and other large directories
-- **Dockerignore** - Reminds about `.dockerignore` for context reduction
-- **Cleanup operations** - Ensures cleanup after package installations
-
-### Layer Analysis
-
-- Total layer count
-- Layer type breakdown
-- Potential issues (too many RUN instructions, missing cleanup, etc.)
 
 ## Example Output
 
 ```
-📦 Docker Layer Optimizer Analysis
+🐳 Docker Layer Optimization Report
+File: /path/to/Dockerfile
 
-File: Dockerfile
-Total Layers: 8
-Multi-Stage: No
+📊 Summary:
+  Instructions: 8
+  Stages: 1
+  Multi-stage: No
+  Issues: 2 high, 1 medium, 1 low
 
-📊 Layer Breakdown:
-  FROM: 1
-  WORKDIR: 1
-  COPY: 2
-  RUN: 3
-  CMD: 1
+⚠️  Issues Found (4):
 
-📏 Estimated Size:
-  245 MB
-    Base Image: 120 MB (1 layers)
-    RUN Layers: 75.0 MB (3 layers)
-    COPY Layers: 50.0 MB (2 layers)
+🔴 [HIGH] Combine package installations
+   Package installation commands should be combined into a single RUN layer
+   💡 Combine all apt-get/yum/apk add commands into one RUN instruction
+   Lines affected:
+     - Line 3: RUN apt-get install -y curl
+     - Line 4: RUN apt-get install -y git
 
-💡 Cache Optimizations:
+🔴 [HIGH] Order COPY by change frequency
+   Copy files that change less frequently before files that change often
+   💡 Move package.json COPY before source file COPY to leverage layer caching
+   Lines affected:
+     - Line 5: COPY . .
 
-  1. [HIGH] apt-get update and install are in separate layers
-     Line 4
-     → Combine update and install into a single RUN to prevent cache invalidation issues
+🟡 [MEDIUM] Clean up package caches
+   Package managers leave cache files that increase image size
+   💡 Add cleanup commands after installations (e.g., apt-get clean)
+   Lines affected:
+     - Line 3: RUN apt-get install -y curl
 
-  2. [HIGH] All source files are copied before package.json
-     Line 6
-     → Copy package.json first, then install dependencies, then copy the rest. This maximizes layer caching.
-
-🎯 Size Recommendations:
-  • Consider using an alpine or slim variant of node to reduce base image size
-  • Use .dockerignore to exclude unnecessary files (node_modules, .git, etc.) from COPY . .
-  • Avoid copying node_modules - install them in the container to ensure platform compatibility
-
-📋 Summary:
-  Total Layers: 8
-  High Priority Issues: 2
-  Medium Priority Issues: 1
-  Low Priority Issues: 0
+🔵 [LOW] Prefer COPY over ADD
+   ADD has automatic features that can be surprising
+   💡 Use COPY for local files. Only use ADD for URL downloads
+   Lines affected:
+     - Line 6: ADD dist /app
 ```
 
-## Use Cases
+## Optimization Rules
 
-- **CI/CD Pipelines** - Analyze Dockerfiles before building
-- **Code Reviews** - Automated Dockerfile optimization checks
-- **Development** - Quick feedback while writing Dockerfiles
-- **Migration** - Identify optimization opportunities in existing Dockerfiles
+The tool analyzes your Dockerfile against these best practices:
 
-## Library Usage
+### High Severity
+- **Package Installation Combined** - Multiple package install commands should be combined
+- **Copy Order** - Less frequently changed files (package.json) should be copied before source code
 
-You can also use this as a library in your Node.js projects:
+### Medium Severity
+- **Cleanup Package Caches** - Remove package manager caches after installation
+- **Multi-Stage Builds** - Use multi-stage builds to exclude build tools from final image
+- **Layer Order** - Combine update and install commands to prevent stale caches
+- **Update/Install Mismatch** - Keep package updates paired with installations
 
-```typescript
-import { DockerLayerOptimizer } from 'docker-layer-optimizer';
+### Low Severity
+- **COPY vs ADD** - Prefer explicit COPY over feature-heavy ADD
+- **NPM Cache Mounts** - Consider BuildKit cache mounts for npm installs
+- **Wildcard Copies** - Avoid wildcard patterns in COPY commands
+- **Dockerignore** - Use .dockerignore to exclude unnecessary files
 
-const optimizer = new DockerLayerOptimizer();
-const result = optimizer.analyze('path/to/Dockerfile');
+## Programmatic Usage
 
-console.log(result.cacheOptimizations);
-console.log(result.sizeEstimate);
+```javascript
+const { Analyzer } = require('docker-layer-optimizer');
+
+async function analyze() {
+  const analyzer = new Analyzer('./Dockerfile');
+  await analyzer.load();
+
+  const results = analyzer.analyze({ estimateSizes: true });
+
+  console.log(`Found ${results.cacheIssues.length} issues`);
+  console.log(`Total layers: ${results.summary.totalInstructions}`);
+
+  const suggestions = analyzer.generateSuggestions();
+  for (const suggestion of suggestions) {
+    console.log(`[${suggestion.severity}] ${suggestion.title}`);
+  }
+}
+
+analyze();
 ```
 
-## Benefits
+## Exit Codes
 
-- ⚡ **Faster deploys** - Smaller images upload and download faster
-- 🚀 **Faster rebuilds** - Better caching means fewer layers need rebuilding
-- 💰 **Cost savings** - Smaller images use less storage and bandwidth
-- ✅ **Best practices** - Automatically enforces Docker best practices
-- 🎯 **Actionable** - Concrete suggestions with before/after examples
+- `0` - Success, no issues found
+- `1` - Error occurred
+- `2` - High-severity issues found (useful for CI)
 
-## License
+## CI/CD Integration
 
-MIT
+### GitHub Actions
+
+```yaml
+name: Dockerfile Analysis
+
+on: [push, pull_request]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: npx docker-layer-opt analyze Dockerfile
+```
+
+### GitLab CI
+
+```yaml
+dockerfile-analysis:
+  stage: test
+  script:
+    - npx docker-layer-opt analyze Dockerfile
+  allow_failure: true
+```
+
+## Docker History Integration
+
+For actual layer size analysis, you can combine with `docker history`:
+
+```bash
+# Build image first
+docker build -t myapp:latest .
+
+# Export history
+docker history --no-trunc --format "{{.ID}}|{{.Size}}|{{.CreatedBy}}" myapp:latest > history.txt
+
+# Analyze (programmatic)
+const { Analyzer } = require('docker-layer-optimizer');
+const analyzer = new Analyzer('./Dockerfile');
+analyzer.load();
+
+const layerAnalysis = analyzer.analyzeFromHistory(historyContent);
+console.log(`Total size: ${layerAnalysis.formattedTotalSize}`);
+```
+
+## How It Works
+
+1. **Parse** - Reads and parses your Dockerfile, detecting stages and instructions
+2. **Analyze** - Applies optimization rules to identify issues
+3. **Estimate** - Heuristically estimates layer sizes (optional)
+4. **Report** - Provides actionable recommendations with severity levels
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit issues or pull requests.
 
-## Author
+## License
 
-AVA <ava@avant-iconic.com>
+MIT License - see LICENSE file for details
+
+## Acknowledgments
+
+Built with ❤️ to help the DevOps community build better Docker images.
