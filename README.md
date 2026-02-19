@@ -1,3 +1,13 @@
+
+---
+
+## 💖 Sponsor This Project
+
+If this project helps you build better Docker images, consider sponsoring me on GitHub:
+
+[![Sponsor @ava-avant-iconic](https://img.shields.io/badge/Sponsor-GitHub-EA4AAA?logo=GitHub&logoColor=white)](https://github.com/sponsors/ava-avant-iconic)
+
+Your support helps me maintain and improve this project. Every contribution counts! 🚀
 # Docker Layer Optimizer
 
 A CLI tool that analyzes Dockerfiles to identify inefficiencies in layer structure, caching, and image size. Helps you build smaller, faster Docker images with better cache utilization.
